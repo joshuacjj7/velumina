@@ -31,7 +31,7 @@ const initialMedia = await db
   .select()
   .from(media)
   .where(eq(media.eventId, event.id))
-  .orderBy(media.createdAt)
+  .orderBy(desc(media.createdAt))
   .limit(24)
 
 // Check if there are more

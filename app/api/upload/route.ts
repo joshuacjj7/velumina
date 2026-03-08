@@ -34,6 +34,14 @@ async function generateVideoThumbnail(videoFilename: string): Promise<string | n
     return null
   }
 }
+async function generateWebVersion(buffer: Buffer, filename: string): Promise<string> {
+  const webFilename = `web_${filename.replace(/\.[^.]+$/, '.jpg')}`
+  await sharp(buffer)
+    .resize(1200, 1200, { fit: 'inside', withoutEnlargement: true })
+    .jpeg({ quality: 82, progressive: true })
+    .toFile(path.join(UPLOAD_DIR, webFilename))
+  return webFilename
+}
 async function generateBlurDataUrl(buffer: Buffer): Promise<string | null> {
   try {
     const tiny = await sharp(buffer)
@@ -85,16 +93,20 @@ export async function POST(req: NextRequest) {
       thumbnailFilename = await generateVideoThumbnail(filename)
     }
 let blurDataUrl: string | null = null
+let webFilename: string | null = null
 if (isImage) {
+  webFilename = await generateWebVersion(buffer, filename)
   blurDataUrl = await generateBlurDataUrl(buffer)
 }
-    const [mediaItem] = await db.insert(media).values({
+
+const [mediaItem] = await db.insert(media).values({
       eventId,
       filename,
       thumbnailFilename,
       originalName: file.name,
       mimeType: file.type,
       blurDataUrl,
+      webFilename,
       size: file.size,
       caption: caption || null,
       uploadedBy: uploadedBy || null,

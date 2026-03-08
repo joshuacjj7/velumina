@@ -7,6 +7,8 @@ import {  updateEvent } from './actions'
 import QRCode from './qr-code'
 import AdminMediaGrid from './media-grid'
 
+
+
 export default async function EventPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   
@@ -134,6 +136,13 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
               className="block text-center text-sm text-neutral-600 hover:underline mt-3"
             >
               Open guest page →
+            </a>
+            <a
+              href={`/e/${event.slug}/book`}
+              className="flex items-center gap-2 px-5 py-3 rounded-full text-sm font-sans font-medium transition"
+              style={{ border: '1px solid rgba(28,28,28,0.15)', color: 'var(--muted)' }}
+            >
+              📖 Photobook
             </a>
           </div>
         </div>

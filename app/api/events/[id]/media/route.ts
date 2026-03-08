@@ -1,29 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { auth } from '@/auth'
 import { db } from '@/db'
 import { media as mediaTable } from '@/db/schema'
-import { eq } from 'drizzle-orm'
-import { unlink } from 'fs/promises'
-import path from 'path'
+import { eq, lt, and, desc } from 'drizzle-orm'
 
-const UPLOAD_DIR = process.env.UPLOAD_DIR ?? path.join(process.cwd(), 'uploads')
+const PAGE_SIZE = 24
 
-export async function DELETE(req: NextRequest) {
-  const session = await auth()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params
+  const { searchParams } = new URL(req.url)
+  const cursor = searchParams.get('cursor')
 
-  const { id, eventId } = await req.json()
-  if (!id || !eventId) return NextResponse.json({ error: 'Missing id or eventId' }, { status: 400 })
+  const conditions = cursor
+    ? and(eq(mediaTable.eventId, id), lt(mediaTable.createdAt, new Date(cursor)))
+    : eq(mediaTable.eventId, id)
 
-  const [item] = await db.select().from(mediaTable).where(eq(mediaTable.id, id)).limit(1)
-  if (!item) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  const items = await db
+    .select()
+    .from(mediaTable)
+    .where(conditions)
+    .orderBy(desc(mediaTable.createdAt))
+    .limit(PAGE_SIZE + 1)
 
-  const filesToDelete = [item.filename, item.thumbnailFilename].filter(Boolean) as string[]
-  await Promise.allSettled(
-    filesToDelete.map(f => unlink(path.join(UPLOAD_DIR, path.basename(f))))
-  )
+  const hasMore = items.length > PAGE_SIZE
+  const media = hasMore ? items.slice(0, PAGE_SIZE) : items
 
-  await db.delete(mediaTable).where(eq(mediaTable.id, id))
-
-  return NextResponse.json({ success: true })
+  return NextResponse.json({
+    media,
+    hasMore,
+    nextCursor: hasMore ? media[media.length - 1].createdAt.toISOString() : null,
+  })
 }

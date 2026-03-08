@@ -35,6 +35,7 @@ export const media = pgTable('media', {
   thumbnailFilename: text('thumbnail_filename'),
   originalName: text('original_name').notNull(),
   mimeType: text('mime_type').notNull(),
+  webFilename: text('web_filename'),
   size: integer('size').notNull(),
   caption: text('caption'),
   uploadedBy: text('uploaded_by'),
