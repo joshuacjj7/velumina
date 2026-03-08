@@ -35,6 +35,18 @@ services:
       retries: 5
     restart: unless-stopped
 
+  watchtower:
+    image: containrrr/watchtower
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /root/.docker/config.json:/config.json
+    environment:
+      - WATCHTOWER_POLL_INTERVAL=300        # check every 5 minutes
+      - WATCHTOWER_CLEANUP=true             # remove old images automatically
+      - WATCHTOWER_INCLUDE_STOPPED=false
+      - WATCHTOWER_LABEL_ENABLE=false       # watch all containers
+    restart: unless-stopped
+
 volumes:
   postgres_data:
 
