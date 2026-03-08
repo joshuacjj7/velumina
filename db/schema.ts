@@ -44,3 +44,13 @@ export const media = pgTable('media', {
   mediaType: text('media_type').notNull().default('photo'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 })
+
+export const invites = pgTable('invites', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  email: text('email').notNull(),
+  token: text('token').notNull().unique(),
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  expiresAt: timestamp('expires_at').notNull(),
+  usedAt: timestamp('used_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+})

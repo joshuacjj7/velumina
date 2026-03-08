@@ -10,6 +10,7 @@ services:
     ports:
       - "3005:3005"
     environment:
+      - RESEND_API_KEY=${RESEND_API_KEY}
       - DATABASE_URL=postgresql://velumina:velumina@db:5432/velumina
       - NODE_ENV=development
     depends_on:

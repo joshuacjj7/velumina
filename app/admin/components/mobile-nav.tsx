@@ -51,6 +51,14 @@ export default function MobileNav({ email }: { email: string }) {
             {email}
           </p>
           <Link
+            href="/admin"
+            onClick={() => setOpen(false)}
+            className="font-sans text-sm px-3 py-2.5 rounded-xl transition"
+            style={{ color: 'var(--charcoal)' }}
+          >
+            Dashboard
+          </Link>
+          <Link
             href="/admin/events"
             onClick={() => setOpen(false)}
             className="font-sans text-sm px-3 py-2.5 rounded-xl transition"
@@ -59,21 +67,34 @@ export default function MobileNav({ email }: { email: string }) {
             Events
           </Link>
           <Link
-            href="/admin"
+            href="/admin/team"
             onClick={() => setOpen(false)}
             className="font-sans text-sm px-3 py-2.5 rounded-xl transition"
             style={{ color: 'var(--charcoal)' }}
           >
-            Dashboard
+            Team
           </Link>
+          <Link
+            href="/admin/settings"
+            onClick={() => setOpen(false)}
+            className="font-sans text-sm px-3 py-2.5 rounded-xl transition"
+            style={{ color: 'var(--charcoal)' }}
+          >
+            Settings
+          </Link>
+
           <form action="/api/auth/signout" method="POST">
-            <button
-                type="submit"
-                className="w-full text-left font-sans text-sm px-3 py-2.5 rounded-xl"
-                style={{ color: '#C0392B' }}
-            >
-                Sign out
-            </button>
+          <button
+            onClick={async () => {
+              setOpen(false)
+              await fetch('/api/auth/signout', { method: 'POST' })
+              window.location.href = '/login'
+            }}
+            className="w-full text-left font-sans text-sm px-3 py-2.5 rounded-xl"
+            style={{ color: '#C0392B' }}
+          >
+            Sign out
+          </button>
             </form>
         </div>
       )}
