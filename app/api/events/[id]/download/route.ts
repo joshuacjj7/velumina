@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { db } from '@/db'
-import { photos, events } from '@/db/schema'
+import { media, events } from '@/db/schema'
 import { eq } from 'drizzle-orm'
 import archiver from 'archiver'
 import { createReadStream, existsSync } from 'fs'
@@ -23,27 +23,27 @@ export async function GET(
   const [event] = await db.select().from(events).where(eq(events.id, id)).limit(1)
   if (!event) return NextResponse.json({ error: 'Event not found' }, { status: 404 })
 
-  const eventPhotos = await db.select().from(photos).where(eq(photos.eventId, id))
-  if (eventPhotos.length === 0) {
-    return NextResponse.json({ error: 'No photos to download' }, { status: 404 })
+  const eventMedia = await db.select().from(media).where(eq(media.eventId, id))
+  if (eventMedia.length === 0) {
+    return NextResponse.json({ error: 'No media to download' }, { status: 404 })
   }
 
   // Create zip archive
   const archive = archiver('zip', { zlib: { level: 6 } })
 
   // Group photos by uploader
-  for (const photo of eventPhotos) {
-    const filePath = path.join(UPLOAD_DIR, photo.filename)
+  for (const mediaItem of eventMedia) {
+    const filePath = path.join(UPLOAD_DIR, mediaItem.filename)
     if (!existsSync(filePath)) continue
 
-    const folder = photo.uploadedBy
-      ? photo.uploadedBy.replace(/[^a-zA-Z0-9_\- ]/g, '').trim() || 'Unknown'
+    const folder = mediaItem.uploadedBy
+      ? mediaItem.uploadedBy.replace(/[^a-zA-Z0-9_\- ]/g, '').trim() || 'Unknown'
       : 'Unknown'
 
-    const ext = photo.filename.split('.').pop()
-    const baseName = photo.caption
-      ? photo.caption.replace(/[^a-zA-Z0-9_\- ]/g, '').trim().slice(0, 40)
-      : photo.originalName.replace(/\.[^/.]+$/, '')
+    const ext = mediaItem.filename.split('.').pop()
+    const baseName = mediaItem.caption
+      ? mediaItem.caption.replace(/[^a-zA-Z0-9_\- ]/g, '').trim().slice(0, 40)
+      : mediaItem.originalName.replace(/\.[^/.]+$/, '')
     const filename = `${baseName}.${ext}`
 
     archive.append(createReadStream(filePath), {
