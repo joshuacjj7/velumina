@@ -82,6 +82,16 @@ export default async function GuestEventPage({ params }: { params: Promise<{ slu
           <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: 'var(--rose)' }} />
           <div className="h-px w-16" style={{ backgroundColor: 'var(--rose)', opacity: 0.4 }} />
         </div>
+
+        {event.rsvpEnabled && (
+          <a
+            href={`/e/${slug}/rsvp`}
+            className="inline-block px-8 py-3 rounded-full text-sm font-sans font-medium mt-8 transition hover:opacity-80"
+            style={{ backgroundColor: 'var(--charcoal)', color: 'var(--ivory)' }}
+          >
+            RSVP to this event
+          </a>
+        )}
       </div>
 
       <GuestGallery

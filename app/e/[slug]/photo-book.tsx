@@ -143,7 +143,7 @@ export default function PhotoBook({
   media: MediaItem[]
   eventName: string
   backUrl?: string
-  onClose: () => void
+  onClose?: () => void
 }) {
   const items = media
   const router = useRouter()

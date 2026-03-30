@@ -1,6 +1,6 @@
 import { db } from '@/db'
-import { events, media } from '@/db/schema'
-import { eq, desc } from 'drizzle-orm'
+import { events, media, rsvps } from '@/db/schema'
+import { eq, desc, and } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import {  updateEvent } from './actions'
@@ -16,6 +16,10 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
   if (!event) notFound()
 
   const eventMedia = await db.select().from(media).where(eq(media.eventId, id)).orderBy(desc(media.createdAt))
+
+  const allRsvps = await db.select().from(rsvps).where(eq(rsvps.eventId, id))
+  const confirmedRsvps = allRsvps.filter(r => r.attending)
+  const totalGuests = confirmedRsvps.reduce((sum, r) => sum + r.guestCount, 0)
 
   const guestUrl = `${process.env.NEXT_PUBLIC_APP_URL}/e/${event.slug}`
 
@@ -91,23 +95,35 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
                   {event.password ? '🔒 This event is password protected' : '🌐 This event is public'}
                 </p>
               </div>
-              <div className="flex items-center gap-3">
-                <input
-                  type="hidden"
-                  name="uploadsEnabled"
-                  value="false"
-                />
-                <input
-                  id="uploadsEnabled"
-                  name="uploadsEnabled"
-                  type="checkbox"
-                  defaultChecked={event.uploadsEnabled}
-                  value="true"
-                  className="h-4 w-4 rounded border-neutral-300 text-neutral-900 focus:ring-neutral-300"
-                />
-                <label htmlFor="uploadsEnabled" className="text-sm font-medium text-neutral-700">
-                  Allow guests to upload photos
-                </label>
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center gap-3">
+                  <input type="hidden" name="uploadsEnabled" value="false" />
+                  <input
+                    id="uploadsEnabled"
+                    name="uploadsEnabled"
+                    type="checkbox"
+                    defaultChecked={event.uploadsEnabled}
+                    value="true"
+                    className="h-4 w-4 rounded border-neutral-300 text-neutral-900 focus:ring-neutral-300"
+                  />
+                  <label htmlFor="uploadsEnabled" className="text-sm font-medium text-neutral-700">
+                    Allow guests to upload photos
+                  </label>
+                </div>
+                <div className="flex items-center gap-3">
+                  <input type="hidden" name="rsvpEnabled" value="false" />
+                  <input
+                    id="rsvpEnabled"
+                    name="rsvpEnabled"
+                    type="checkbox"
+                    defaultChecked={event.rsvpEnabled}
+                    value="true"
+                    className="h-4 w-4 rounded border-neutral-300 text-neutral-900 focus:ring-neutral-300"
+                  />
+                  <label htmlFor="rsvpEnabled" className="text-sm font-medium text-neutral-700">
+                    Enable guest RSVPs
+                  </label>
+                </div>
               </div>
               <button
                 type="submit"
@@ -161,6 +177,34 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
               </a>
             )}
           </div>
+
+          {/* RSVP summary */}
+          {event.rsvpEnabled && (
+            <div className="bg-white border border-neutral-100 rounded-xl p-5">
+              <h2 className="font-semibold text-neutral-800 mb-1">RSVPs</h2>
+              <p className="text-xs text-neutral-400 mb-3 break-all">{guestUrl}/rsvp</p>
+              <div className="grid grid-cols-3 gap-2 mb-3">
+                <div className="text-center">
+                  <p className="text-lg font-semibold text-neutral-800">{confirmedRsvps.length}</p>
+                  <p className="text-xs text-neutral-400">Confirmed</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-lg font-semibold text-neutral-800">{totalGuests}</p>
+                  <p className="text-xs text-neutral-400">Guests</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-lg font-semibold text-neutral-800">{allRsvps.length - confirmedRsvps.length}</p>
+                  <p className="text-xs text-neutral-400">Declined</p>
+                </div>
+              </div>
+              <Link
+                href={`/admin/events/${event.id}/rsvps`}
+                className="block text-center text-sm text-neutral-600 hover:underline"
+              >
+                View all RSVPs →
+              </Link>
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -25,6 +25,7 @@ export const events = pgTable('events', {
   coverPhotoId: uuid('cover_photo_id'),
   password: text('password'),  // null = public, set = protected
   uploadsEnabled: boolean('uploads_enabled').default(true).notNull(),
+  rsvpEnabled: boolean('rsvp_enabled').default(false).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 })
@@ -45,6 +46,21 @@ export const media = pgTable('media', {
   blurDataUrl: text('blur_data_url'),
   mediaType: text('media_type').notNull().default('photo'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
+})
+
+export const rsvps = pgTable('rsvps', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  eventId: uuid('event_id').notNull().references(() => events.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  email: text('email').notNull(),
+  attending: boolean('attending').notNull(),
+  guestCount: integer('guest_count').default(1).notNull(),
+  guestNames: text('guest_names'),  // JSON array of additional guest names
+  dietaryNotes: text('dietary_notes'),
+  token: text('token').notNull().unique(),
+  reminderSentAt: timestamp('reminder_sent_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
 })
 
 export const invites = pgTable('invites', {

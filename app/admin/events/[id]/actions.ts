@@ -14,7 +14,8 @@ export async function updateEvent(formData: FormData) {
   const description = formData.get('description') as string
   const date = formData.get('date') as string
   const password = formData.get('password') as string
-  const uploadsEnabled = formData.get('uploadsEnabled') === 'true'
+  const uploadsEnabled = formData.getAll('uploadsEnabled').includes('true')
+  const rsvpEnabled = formData.getAll('rsvpEnabled').includes('true')
 
   await db.update(events).set({
     name,
@@ -23,6 +24,7 @@ export async function updateEvent(formData: FormData) {
     date: date ? new Date(date) : null,
     password: password || null,
     uploadsEnabled,
+    rsvpEnabled,
     updatedAt: new Date(),
   }).where(eq(events.id, id))
 
