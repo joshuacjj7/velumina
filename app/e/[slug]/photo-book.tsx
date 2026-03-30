@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect,useRef } from 'react'
+import { useState, useEffect, useRef, useMemo, forwardRef } from 'react'
 import { useRouter } from 'next/navigation'
+import HTMLFlipBook from 'react-pageflip'
 
 type MediaItem = {
   id: string
@@ -12,37 +13,67 @@ type MediaItem = {
   uploadedBy: string | null
   mediaType: string
 }
-function PageContent({ item, active }: { item: MediaItem, active: boolean }) {
-  const videoRef = useRef<HTMLVideoElement>(null)
 
+const Page = forwardRef<HTMLDivElement, {
+  children: React.ReactNode
+  pageNumber?: number
+}>(({ children, pageNumber }, ref) => {
+  return (
+    <div
+      ref={ref}
+      className="relative w-full h-full overflow-hidden"
+      style={{ backgroundColor: '#f5f0e8', willChange: 'transform' }}
+    >
+      {children}
+      {pageNumber !== undefined && (
+        <p
+          className="absolute bottom-3 left-0 right-0 text-center font-sans"
+          style={{ color: 'rgba(28,28,28,0.2)', fontSize: '0.6rem', letterSpacing: '0.15em' }}
+        >
+          {pageNumber}
+        </p>
+      )}
+    </div>
+  )
+})
+Page.displayName = 'Page'
+
+function FadeImg({ src, alt, className, style }: {
+  src: string; alt: string; className?: string; style?: React.CSSProperties
+}) {
+  const [loaded, setLoaded] = useState(false)
+  return (
+    <img
+      src={src} alt={alt} className={className}
+      style={{ ...style, opacity: loaded ? 1 : 0, transition: 'opacity 0.35s ease' }}
+      onLoad={() => setLoaded(true)}
+    />
+  )
+}
+
+function VideoPage({ item, active }: { item: MediaItem; active: boolean }) {
+  const videoRef = useRef<HTMLVideoElement>(null)
   useEffect(() => {
     const v = videoRef.current
     if (!v) return
-    if (active) {
-      v.play().catch(() => {})
-    } else {
-      v.pause()
-      v.currentTime = 0
-    }
+    if (active) v.play().catch(() => {})
+    else { v.pause(); v.currentTime = 0 }
   }, [active])
-
-  if (item.mediaType === 'video') {
-    return (
-      <video
-        ref={videoRef}
-        src={`/api/photo/${item.filename}`}
-        className="max-w-full max-h-full object-contain"
-        style={{ display: 'block' }}
-        loop
-        muted
-        playsInline
-        autoPlay={active}
-      />
-    )
-  }
-
   return (
-    <img
+    <video
+      ref={videoRef}
+      src={`/api/photo/${item.filename}`}
+      className="max-w-full max-h-full object-contain"
+      style={{ display: 'block' }}
+      loop muted playsInline
+    />
+  )
+}
+
+function PhotoPageContent({ item, active }: { item: MediaItem; active: boolean }) {
+  if (item.mediaType === 'video') return <VideoPage item={item} active={active} />
+  return (
+    <FadeImg
       src={`/api/photo/${item.filename}`}
       alt={item.caption ?? item.originalName}
       className="max-w-full max-h-full object-contain"
@@ -50,82 +81,9 @@ function PageContent({ item, active }: { item: MediaItem, active: boolean }) {
     />
   )
 }
-export default function PhotoBook({
-  media,
-  eventName,
-    backUrl,
-  onClose,
-}: {
-  media: MediaItem[]
-  eventName: string
-  backUrl?: string
-  onClose: () => void
-}) {
-const items = media  // videos included
-
-  const [spread, setSpread] = useState(0)
-  const [flipping, setFlipping] = useState(false)
-  const [flipDir, setFlipDir] = useState<'next' | 'prev'>('next')
-  const [displaySpread, setDisplaySpread] = useState(0)
-
-const router = useRouter()
-
-  function handleClose() {
-    if (onClose) onClose()
-    else if (backUrl) router.push(backUrl)
-  }
-
-  // spread 0 = cover, then photo pairs
-    const totalSpreads = Math.ceil(items.length / 2) + 1
-
-function getPhotos(s: number): [MediaItem | null, MediaItem | null] {
-  if (s === 0) return [null, null]
-  const i = (s - 1) * 2
-  return [items[i] ?? null, items[i + 1] ?? null]
-}
-
-  function goNext() {
-    if (flipping || spread >= totalSpreads - 1) return
-    setFlipDir('next')
-    setFlipping(true)
-    setTimeout(() => {
-      setSpread(s => s + 1)
-      setDisplaySpread(s => s + 1)
-      setFlipping(false)
-    }, 480)
-  }
-
-  function goPrev() {
-    if (flipping || spread <= 0) return
-    setFlipDir('prev')
-    setFlipping(true)
-    setTimeout(() => {
-      setSpread(s => s - 1)
-      setDisplaySpread(s => s - 1)
-      setFlipping(false)
-    }, 480)
-  }
-
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'ArrowRight') goNext()
-      if (e.key === 'ArrowLeft') goPrev()
-      if (e.key === 'Escape') handleClose()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [spread, flipping])
-
-  const [leftPhoto, rightPhoto] = getPhotos(displaySpread)
-  const nextSpread = flipDir === 'next' ? displaySpread + 1 : displaySpread - 1
-  const [nextLeft, nextRight] = getPhotos(Math.max(0, Math.min(nextSpread, totalSpreads - 1)))
-
-  const isCover = displaySpread === 0
-  const isLastSpread = displaySpread === totalSpreads - 1
 
 function LandscapePrompt() {
   const [show, setShow] = useState(false)
-
   useEffect(() => {
     function check() {
       const isMobile = window.innerWidth < 1024
@@ -140,48 +98,12 @@ function LandscapePrompt() {
       window.screen.orientation?.removeEventListener('change', check)
     }
   }, [])
-
   if (!show) return null
-useEffect(() => {
-  const toPreload: string[] = []
-  const [nl, nr] = getPhotos(Math.min(spread + 1, totalSpreads - 1))
-  const [pl, pr] = getPhotos(Math.max(spread - 1, 0))
-  ;[nl, nr, pl, pr].forEach(item => {
-    if (item && item.mediaType !== 'video') {
-      toPreload.push(`/api/photo/${item.filename}`)
-    }
-  })
-  toPreload.forEach(src => {
-    const img = new Image()
-    img.src = src
-  })
-}, [spread])
-
-
   return (
-    <div
-      className="fixed inset-0 z-[60] flex flex-col items-center justify-center text-center px-8"
-      style={{ backgroundColor: '#1a1510' }}
-    >
-      <div
-        className="text-5xl mb-6"
-        style={{
-          display: 'inline-block',
-          animation: 'rotateHint 1.8s ease-in-out infinite',
-        }}
-      >
-        📱
-      </div>
-      <p
-        className="font-display italic text-2xl mb-3"
-        style={{ color: '#f5f0e8' }}
-      >
-        Rotate your device
-      </p>
-      <p
-        className="font-sans text-sm"
-        style={{ color: 'rgba(245,240,232,0.4)', letterSpacing: '0.05em' }}
-      >
+    <div className="fixed inset-0 z-[60] flex flex-col items-center justify-center text-center px-8" style={{ backgroundColor: '#1a1510' }}>
+      <div className="text-5xl mb-6" style={{ display: 'inline-block', animation: 'rotateHint 1.8s ease-in-out infinite' }}>📱</div>
+      <p className="font-display italic text-2xl mb-3" style={{ color: '#f5f0e8' }}>Rotate your device</p>
+      <p className="font-sans text-sm" style={{ color: 'rgba(245,240,232,0.4)', letterSpacing: '0.05em' }}>
         The photobook is best viewed in landscape mode
       </p>
       <style>{`
@@ -191,45 +113,124 @@ useEffect(() => {
           60%       { transform: rotate(90deg); }
         }
       `}</style>
-          {/iPhone|iPad/i.test(navigator.userAgent) && (
-        <p
-            className="absolute bottom-6 font-sans text-xs text-center px-8"
-            style={{ color: 'rgba(255,255,255,0.2)', letterSpacing: '0.05em' }}
-        >
-            For fullscreen: tap Share → Add to Home Screen
+      {/iPhone|iPad/i.test(navigator.userAgent) && (
+        <p className="absolute bottom-6 font-sans text-xs text-center px-8" style={{ color: 'rgba(255,255,255,0.2)', letterSpacing: '0.05em' }}>
+          For fullscreen: tap Share → Add to Home Screen
         </p>
-        )}
+      )}
     </div>
   )
 }
-useEffect(() => {
-  // nudge Safari into hiding its tab bar
-  document.documentElement.style.overflow = 'hidden'
-  window.scrollTo(0, 1)
-  return () => {
-    document.documentElement.style.overflow = ''
+
+export default function PhotoBook({
+  media,
+  eventName,
+  backUrl,
+  onClose,
+}: {
+  media: MediaItem[]
+  eventName: string
+  backUrl?: string
+  onClose?: () => void
+}) {
+  const FLIP_DURATION = 700 // must match flippingTime prop
+
+  const items = media
+  const router = useRouter()
+  const bookRef = useRef<any>(null)
+  const [currentPage, setCurrentPage] = useState(0)
+  // containerPage only updates AFTER the flip animation finishes
+  // so the container expand/collapse never fights the page curl
+  const [containerPage, setContainerPage] = useState(0)
+  const [bookSize, setBookSize] = useState({ width: 500, height: 400 })
+
+  const paddedPhotos = useMemo(() => {
+    const arr: (MediaItem | null)[] = [...items]
+    if (arr.length % 2 !== 0) arr.push(null)
+    return arr
+  }, [items])
+
+  // Page layout:
+  // 0      → front cover  (single page, right-aligned via showCover)
+  // 1      → blank inside cover
+  // 2      → "turn the page" instruction
+  // 3..N   → photo pages
+  // N+1    → back cover   (single page, left-aligned via showCover)
+  const totalPageCount = 1 + 2 + paddedPhotos.length + 1
+  const spreadCount = 1 + 1 + Math.ceil(paddedPhotos.length / 2) + 1
+  const currentSpread = Math.min(Math.floor(currentPage / 2), spreadCount - 1)
+  const isFirstPage = currentPage === 0
+  const isLastPage = currentPage >= totalPageCount - 1
+
+  // Container state driven by containerPage (post-flip)
+  const isCoverState = containerPage === 0
+  const isBackCoverState = containerPage >= totalPageCount - 1
+
+  // Width: single page on cover/back-cover, double on spreads
+  const containerWidth = (isCoverState || isBackCoverState)
+    ? bookSize.width
+    : bookSize.width * 2
+
+  // Offset: slide left by one page-width on front cover so right half shows
+  // Back cover: no offset, left half is already visible
+  const containerTranslateX = isCoverState ? -bookSize.width : 0
+
+  // Debounced responsive sizing
+  useEffect(() => {
+    function updateSize() {
+      const w = Math.min(Math.floor(window.innerWidth * 0.42), 860)
+      const h = Math.min(Math.floor(window.innerHeight * 0.72), 680)
+      setBookSize({ width: w, height: h })
+    }
+    updateSize()
+    let timer: ReturnType<typeof setTimeout>
+    const debounced = () => { clearTimeout(timer); timer = setTimeout(updateSize, 200) }
+    window.addEventListener('resize', debounced)
+    return () => window.removeEventListener('resize', debounced)
+  }, [])
+
+  // Preload all images on mount
+  useEffect(() => {
+    items.forEach(item => {
+      if (item.mediaType !== 'video') {
+        const img = new Image()
+        img.src = `/api/photo/${item.filename}`
+      }
+    })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Safari fullscreen nudge
+  useEffect(() => {
+    document.documentElement.style.overflow = 'hidden'
+    window.scrollTo(0, 1)
+    return () => { document.documentElement.style.overflow = '' }
+  }, [])
+
+  function handleClose() {
+    if (onClose) onClose()
+    else if (backUrl) router.push(backUrl)
   }
-}, [])
+
+  function goNext() { bookRef.current?.pageFlip()?.flipNext() }
+  function goPrev() { bookRef.current?.pageFlip()?.flipPrev() }
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'ArrowRight') goNext()
+      if (e.key === 'ArrowLeft') goPrev()
+      if (e.key === 'Escape') handleClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
   return (
     <>
-    <LandscapePrompt />
-      <style>{`
-        @keyframes flipPageNext {
-          0%   { transform: perspective(2000px) rotateY(0deg); }
-          100% { transform: perspective(2000px) rotateY(-180deg); }
-        }
-        @keyframes flipPagePrev {
-          0%   { transform: perspective(2000px) rotateY(0deg); }
-          100% { transform: perspective(2000px) rotateY(180deg); }
-        }
-        .flip-next { animation: flipPageNext 0.48s cubic-bezier(0.645, 0.045, 0.355, 1.000) forwards; }
-        .flip-prev { animation: flipPagePrev 0.48s cubic-bezier(0.645, 0.045, 0.355, 1.000) forwards; }
-      `}</style>
+      <LandscapePrompt />
 
-      {/* Backdrop */}
       <div
         className="fixed inset-0 z-50 flex flex-col items-center justify-center select-none"
-        style={{ backgroundColor: '#1a1510',height: '100dvh', paddingBottom: 'env(safe-area-inset-bottom)', }}
+        style={{ backgroundColor: '#1a1510', height: '100dvh', paddingBottom: 'env(safe-area-inset-bottom)' }}
       >
         {/* Close */}
         <button
@@ -248,134 +249,135 @@ useEffect(() => {
           {/* Prev arrow */}
           <button
             onClick={goPrev}
-            disabled={spread === 0 || flipping}
+            disabled={isFirstPage}
             className="shrink-0 transition-all duration-200"
-            style={{ color: spread === 0 ? 'transparent' : 'rgba(255,255,255,0.25)' }}
-            onMouseEnter={e => { if (spread > 0) e.currentTarget.style.color = 'rgba(255,255,255,0.8)' }}
-            onMouseLeave={e => { e.currentTarget.style.color = spread === 0 ? 'transparent' : 'rgba(255,255,255,0.25)' }}
+            style={{ color: isFirstPage ? 'transparent' : 'rgba(255,255,255,0.25)' }}
+            onMouseEnter={e => { if (!isFirstPage) e.currentTarget.style.color = 'rgba(255,255,255,0.8)' }}
+            onMouseLeave={e => { e.currentTarget.style.color = isFirstPage ? 'transparent' : 'rgba(255,255,255,0.25)' }}
           >
             <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
-              <path d="M20 6L10 16L20 26" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M20 6L10 16L20 26" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </button>
 
-          {/* ── The Book ── */}
+          {/*
+           * OUTER: clips to the visible portion (single or double width)
+           * INNER: positions the full flipbook, offset so correct half shows
+           * Both animate AFTER flip completes (containerPage delayed by FLIP_DURATION)
+           */}
           <div
-            className="relative shrink-0"
             style={{
-                width: 'min(88vw, 2080px)',
-                height: 'min(36vw, 1000px)',
-                perspective: '3000px',
+              overflow: 'hidden',
+              flexShrink: 0,
+              width: containerWidth,
+              height: bookSize.height,
+              transition: `width 0.5s cubic-bezier(0.645, 0.045, 0.355, 1.000)`,
+              boxShadow: '0 60px 120px rgba(0,0,0,0.85), 0 20px 40px rgba(0,0,0,0.6)',
+              borderRadius: '2px',
+              position: 'relative',
             }}
           >
-            {/* Drop shadow */}
             <div
-              className="absolute inset-0 rounded-sm"
-              style={{ boxShadow: '0 60px 120px rgba(0,0,0,0.85), 0 20px 40px rgba(0,0,0,0.6)' }}
-            />
-
-            {/* Book body */}
-            <div className="absolute inset-0 flex rounded-sm overflow-hidden">
-
-              {/* ── Left page ── */}
-              <div
-                className="relative flex-1 flex items-center justify-center overflow-hidden"
-                style={{ backgroundColor: '#f5f0e8' }}
-                onClick={goPrev}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                transform: `translateX(${containerTranslateX}px)`,
+                transition: `transform 0.5s cubic-bezier(0.645, 0.045, 0.355, 1.000)`,
+              }}
+            >
+              <HTMLFlipBook
+                ref={bookRef}
+                width={bookSize.width}
+                height={bookSize.height}
+                size="fixed"
+                minWidth={200}
+                maxWidth={900}
+                minHeight={200}
+                maxHeight={700}
+                drawShadow={true}
+                flippingTime={FLIP_DURATION}
+                usePortrait={false}
+                startZIndex={10}
+                autoSize={false}
+                maxShadowOpacity={0.5}
+                showCover={true}
+                mobileScrollSupport={false}
+                clickEventForward={false}
+                useMouseEvents={true}
+                swipeDistance={30}
+                showPageCorners={true}
+                disableFlipByClick={false}
+                className=""
+                style={{}}
+                startPage={0}
+                onFlip={(e: any) => {
+                  const page = e.data
+                  // Update immediately for arrows/dots
+                  setCurrentPage(page)
+                  // Update container AFTER flip finishes so animations don't clash
+                  setTimeout(() => setContainerPage(page), FLIP_DURATION)
+                }}
               >
-                {isCover ? (
-                  /* Cover left — decorative */
-                  <div
-                    className="absolute inset-0 flex flex-col items-center justify-center px-10"
-                    style={{ backgroundColor: '#1c1712' }}
-                  >
-                    {/* Decorative corner marks */}
+                {/* ── Front cover (page 0) ── */}
+                <Page>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center" style={{ backgroundColor: '#1c1712' }}>
                     {['top-4 left-4', 'top-4 right-4', 'bottom-4 left-4', 'bottom-4 right-4'].map((pos, i) => (
-                      <div key={i} className={`absolute ${pos} w-5 h-5`} style={{ border: '1px solid rgba(184,149,90,0.4)', borderRadius: '1px' }} />
+                      <div key={i} className={`absolute ${pos} w-8 h-8`} style={{ border: '1px solid rgba(184,149,90,0.35)', borderRadius: '1px' }} />
                     ))}
-                    <div className="text-center">
-                      <p className="font-display text-xs tracking-[0.4em] uppercase mb-6" style={{ color: 'var(--rose)', opacity: 0.7 }}>
-                        a collection of memories
+                    <div className="flex items-center gap-3 mb-8">
+                      <div className="h-px w-16" style={{ backgroundColor: 'rgba(184,149,90,0.4)' }} />
+                      <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: 'rgba(184,149,90,0.6)' }} />
+                      <div className="h-px w-16" style={{ backgroundColor: 'rgba(184,149,90,0.4)' }} />
+                    </div>
+                    <div className="text-center px-10">
+                      <p
+                        className="font-display font-light tracking-[0.35em] uppercase"
+                        style={{ color: 'rgba(245,240,232,0.5)', fontSize: 'clamp(0.55rem, 1vw, 0.75rem)' }}
+                      >
+                        the proposal of
                       </p>
                       <h1
-                        className="font-display font-light leading-tight"
-                        style={{
-                          color: '#f5f0e8',
-                          fontSize: 'clamp(1.4rem, 3.5vw, 2.8rem)',
-                        }}
+                        className="font-display font-light mt-3 leading-snug"
+                        style={{ color: '#f5f0e8', fontSize: 'clamp(2rem, 4.5vw, 3.6rem)' }}
                       >
-                        {eventName}
+                        Joshua
                       </h1>
-                      <div className="flex items-center justify-center gap-3 mt-6">
-                        <div className="h-px w-12" style={{ backgroundColor: 'var(--gold)', opacity: 0.5 }} />
-                        <div className="w-1 h-1 rounded-full" style={{ backgroundColor: 'var(--gold)' }} />
-                        <div className="h-px w-12" style={{ backgroundColor: 'var(--gold)', opacity: 0.5 }} />
-                      </div>
+                      <p
+                        className="font-display italic mt-1 mb-1"
+                        style={{ color: 'rgba(184,149,90,0.7)', fontSize: 'clamp(0.9rem, 1.8vw, 1.4rem)' }}
+                      >
+                        &amp;
+                      </p>
+                      <h1
+                        className="font-display font-light leading-snug"
+                        style={{ color: '#f5f0e8', fontSize: 'clamp(2rem, 4.5vw, 3.6rem)' }}
+                      >
+                        Chai
+                      </h1>
                     </div>
-                  </div>
-                ) : leftPhoto ? (
-                  /* Photo page */
-                  <div className="absolute inset-0 flex items-center justify-center" style={{ padding: '5%' }}>
-                    <div
-                      className="w-full h-full flex flex-col items-center justify-center"
-                      style={{
-                        backgroundColor: 'white',
-                        padding: '4%',
-                        boxShadow: '0 2px 16px rgba(0,0,0,0.12)',
-                      }}
+                    <div className="flex items-center gap-3 mt-8">
+                      <div className="h-px w-16" style={{ backgroundColor: 'rgba(184,149,90,0.4)' }} />
+                      <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: 'rgba(184,149,90,0.6)' }} />
+                      <div className="h-px w-16" style={{ backgroundColor: 'rgba(184,149,90,0.4)' }} />
+                    </div>
+                    <p
+                      className="font-display italic mt-6"
+                      style={{ color: 'rgba(245,240,232,0.25)', fontSize: 'clamp(0.6rem, 1.1vw, 0.85rem)', letterSpacing: '0.1em' }}
                     >
-                      <div className="flex-1 w-full overflow-hidden flex items-center justify-center" style={{ minHeight: 0 }}>
-                        <PageContent item={leftPhoto} active={!flipping} />
-                      </div>
-                      {leftPhoto.caption && (
-                        <p
-                          className="font-display italic text-center mt-2 shrink-0"
-                          style={{
-                            color: 'rgba(28,28,28,0.45)',
-                            fontSize: 'clamp(0.55rem, 1vw, 0.75rem)',
-                          }}
-                        >
-                          {leftPhoto.caption}
-                        </p>
-                      )}
-                    </div>
+                      a moment captured forever
+                    </p>
                   </div>
-                ) : (
-                  /* Empty left page (last spread odd count) */
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <p className="font-display italic text-2xl" style={{ color: 'rgba(28,28,28,0.1)' }}>fin.</p>
-                  </div>
-                )}
+                </Page>
 
-                {/* Page number */}
-                {!isCover && (
-                  <p
-                    className="absolute bottom-3 left-0 right-0 text-center font-sans"
-                    style={{ color: 'rgba(28,28,28,0.2)', fontSize: '0.6rem', letterSpacing: '0.15em' }}
-                  >
-                    {(displaySpread - 1) * 2 + 1}
-                  </p>
-                )}
-              </div>
+                {/* ── Blank inside cover (page 1) ── */}
+                <Page>
+                  <div className="absolute inset-0" style={{ backgroundColor: '#f5f0e8' }} />
+                </Page>
 
-              {/* ── Spine ── */}
-              <div
-                style={{
-                  width: '6px',
-                  flexShrink: 0,
-                  background: 'linear-gradient(to right, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.08) 40%, rgba(255,255,255,0.15) 60%, rgba(0,0,0,0.1) 100%)',
-                }}
-              />
-
-              {/* ── Right page ── */}
-              <div
-                className="relative flex-1 flex items-center justify-center overflow-hidden"
-                style={{ backgroundColor: '#faf7f2' }}
-                onClick={goNext}
-              >
-                {isCover ? (
-                  /* Cover right — open invitation */
-                  <div className="text-center px-10">
+                {/* ── Turn the page instruction (page 2) ── */}
+                <Page>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center" style={{ backgroundColor: '#faf7f2' }}>
                     <p className="font-display italic" style={{ color: 'var(--muted)', fontSize: 'clamp(0.9rem, 2vw, 1.3rem)' }}>
                       Turn the page to begin
                     </p>
@@ -383,147 +385,77 @@ useEffect(() => {
                       {items.length} photograph{items.length !== 1 ? 's' : ''}
                     </p>
                   </div>
-                ) : isLastSpread && !rightPhoto ? (
-                  /* Back cover */
-                  <div
-                    className="absolute inset-0 flex items-center justify-center"
-                    style={{ backgroundColor: '#1c1712' }}
-                  >
-                    <p className="font-display italic" style={{ color: 'rgba(245,240,232,0.25)', fontSize: 'clamp(1rem, 2.5vw, 1.6rem)' }}>
-                      fin.
-                    </p>
-                  </div>
-                ) : rightPhoto ? (
-                  /* Photo page */
-                  <div className="absolute inset-0 flex items-center justify-center" style={{ padding: '5%' }}>
-                    <div
-                      className="w-full h-full flex flex-col items-center justify-center"
-                      style={{
-                        backgroundColor: 'white',
-                        padding: '4%',
-                        boxShadow: '0 2px 16px rgba(0,0,0,0.12)',
-                      }}
-                    >
-                      <div className="flex-1 w-full overflow-hidden flex items-center justify-center" style={{ minHeight: 0 }}>
-                        <PageContent item={rightPhoto} active={!flipping} />
-                      </div>
-                      {rightPhoto.caption && (
-                        <p
-                          className="font-display italic text-center mt-2 shrink-0"
-                          style={{
-                            color: 'rgba(28,28,28,0.45)',
-                            fontSize: 'clamp(0.55rem, 1vw, 0.75rem)',
-                          }}
+                </Page>
+
+                {/* ── Photo pages (start at page 3) ── */}
+                {paddedPhotos.map((item, idx) => (
+                  <Page key={idx} pageNumber={idx + 1}>
+                    {item ? (
+                      <div
+                        className="absolute inset-0 flex items-center justify-center"
+                        style={{ padding: '5%', backgroundColor: idx % 2 === 0 ? '#f5f0e8' : '#faf7f2' }}
+                      >
+                        <div
+                          className="w-full h-full flex flex-col items-center justify-center"
+                          style={{ backgroundColor: 'white', padding: '4%', boxShadow: '0 2px 16px rgba(0,0,0,0.12)' }}
                         >
-                          {rightPhoto.caption}
-                        </p>
-                      )}
-                    </div>
+                          <div className="flex-1 w-full overflow-hidden flex items-center justify-center" style={{ minHeight: 0 }}>
+                            <PhotoPageContent item={item} active={currentPage === idx + 3} />
+                          </div>
+                          {item.caption && (
+                            <p
+                              className="font-display italic text-center mt-2 shrink-0"
+                              style={{ color: 'rgba(28,28,28,0.45)', fontSize: 'clamp(0.55rem, 1vw, 0.75rem)' }}
+                            >
+                              {item.caption}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="absolute inset-0 flex items-center justify-center" style={{ backgroundColor: '#faf7f2' }}>
+                        <p className="font-display italic text-2xl" style={{ color: 'rgba(28,28,28,0.1)' }}>fin.</p>
+                      </div>
+                    )}
+                  </Page>
+                ))}
+
+                {/* ── Back cover (last page) ── */}
+                <Page>
+                  <div className="absolute inset-0 flex items-center justify-center" style={{ backgroundColor: '#1c1712' }}>
+                    <p className="font-display italic" style={{ color: 'rgba(245,240,232,0.25)', fontSize: 'clamp(1rem, 2.5vw, 1.6rem)' }}>fin.</p>
                   </div>
-                ) : null}
+                </Page>
 
-                {/* Page number */}
-                {!isCover && rightPhoto && (
-                  <p
-                    className="absolute bottom-3 left-0 right-0 text-center font-sans"
-                    style={{ color: 'rgba(28,28,28,0.2)', fontSize: '0.6rem', letterSpacing: '0.15em' }}
-                  >
-                    {(displaySpread - 1) * 2 + 2}
-                  </p>
-                )}
-              </div>
+              </HTMLFlipBook>
             </div>
-
-            {/* ── Flip animation overlay ── */}
-            {flipping && (
-              <div
-                className={`${flipDir === 'next' ? 'flip-next' : 'flip-prev'}`}
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  bottom: 0,
-                  ...(flipDir === 'next'
-                    ? { left: '50%', right: 0, transformOrigin: 'left center' }
-                    : { left: 0, right: '50%', transformOrigin: 'right center' }
-                  ),
-                  transformStyle: 'preserve-3d',
-                  zIndex: 20,
-                }}
-              >
-                {/* Front face of flipping page */}
-                <div
-                  style={{
-                    position: 'absolute', inset: 0,
-                    backfaceVisibility: 'hidden',
-                    backgroundColor: flipDir === 'next' ? '#faf7f2' : '#f5f0e8',
-                    overflow: 'hidden',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}
-                >
-                  {flipDir === 'next' && rightPhoto && (
-                    <div style={{ position: 'absolute', inset: '5%', backgroundColor: 'white', padding: '4%', boxShadow: '0 2px 16px rgba(0,0,0,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <img src={`/api/photo/${rightPhoto.filename}`} className="max-w-full max-h-full object-contain" style={{ display: 'block' }} />
-                    </div>
-                  )}
-                  {flipDir === 'prev' && nextLeft && (
-                    <div style={{ position: 'absolute', inset: '5%', backgroundColor: 'white', padding: '4%', boxShadow: '0 2px 16px rgba(0,0,0,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <img src={`/api/photo/${nextLeft.filename}`} className="max-w-full max-h-full object-contain" style={{ display: 'block' }} />
-                    </div>
-                  )}
-                </div>
-
-                {/* Back face of flipping page */}
-                <div
-                  style={{
-                    position: 'absolute', inset: 0,
-                    backfaceVisibility: 'hidden',
-                    transform: 'rotateY(180deg)',
-                    backgroundColor: '#f5f0e8',
-                    overflow: 'hidden',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}
-                >
-                  {flipDir === 'next' && nextLeft && (
-                    <div style={{ position: 'absolute', inset: '5%', backgroundColor: 'white', padding: '4%', boxShadow: '0 2px 16px rgba(0,0,0,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <img src={`/api/photo/${nextLeft.filename}`} className="max-w-full max-h-full object-contain" style={{ display: 'block' }} />
-                    </div>
-                  )}
-                  {flipDir === 'prev' && leftPhoto && (
-                    <div style={{ position: 'absolute', inset: '5%', backgroundColor: 'white', padding: '4%', boxShadow: '0 2px 16px rgba(0,0,0,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <img src={`/api/photo/${leftPhoto.filename}`} className="max-w-full max-h-full object-contain" style={{ display: 'block' }} />
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
           </div>
-          {/* ── End book ── */}
 
           {/* Next arrow */}
           <button
             onClick={goNext}
-            disabled={spread >= totalSpreads - 1 || flipping}
+            disabled={isLastPage}
             className="shrink-0 transition-all duration-200"
-            style={{ color: spread >= totalSpreads - 1 ? 'transparent' : 'rgba(255,255,255,0.25)' }}
-            onMouseEnter={e => { if (spread < totalSpreads - 1) e.currentTarget.style.color = 'rgba(255,255,255,0.8)' }}
-            onMouseLeave={e => { e.currentTarget.style.color = spread >= totalSpreads - 1 ? 'transparent' : 'rgba(255,255,255,0.25)' }}
+            style={{ color: isLastPage ? 'transparent' : 'rgba(255,255,255,0.25)' }}
+            onMouseEnter={e => { if (!isLastPage) e.currentTarget.style.color = 'rgba(255,255,255,0.8)' }}
+            onMouseLeave={e => { e.currentTarget.style.color = isLastPage ? 'transparent' : 'rgba(255,255,255,0.25)' }}
           >
             <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
-              <path d="M12 6L22 16L12 26" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M12 6L22 16L12 26" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </button>
         </div>
 
         {/* Spread indicator dots */}
         <div className="flex items-center gap-1.5 mt-6">
-          {Array.from({ length: totalSpreads }).map((_, i) => (
+          {Array.from({ length: spreadCount }).map((_, i) => (
             <div
               key={i}
               className="rounded-full transition-all duration-300"
               style={{
-                width: i === displaySpread ? '16px' : '4px',
+                width: currentSpread === i ? '16px' : '4px',
                 height: '4px',
-                backgroundColor: i === displaySpread ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.15)',
+                backgroundColor: currentSpread === i ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.15)',
               }}
             />
           ))}

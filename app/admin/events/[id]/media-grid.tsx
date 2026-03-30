@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 
 type MediaItem = {
@@ -28,9 +28,27 @@ export default function AdminMediaGrid({
   const [lightboxItem, setLightboxItem] = useState<MediaItem | null>(null)
   const [lightboxIndex, setLightboxIndex] = useState(0)
   const [deleting, setDeleting] = useState(false)
+  const [filterType, setFilterType] = useState<'all' | 'photo' | 'video'>('all')
+  const [filterName, setFilterName] = useState<string | null>(null)
   const touchStartX = useRef<number>(0)
 
-  const photoItems = media.filter(m => m.mediaType !== 'video')
+  const uniqueNames = useMemo(() => {
+    const names = new Set<string>()
+    for (const m of media) {
+      if (m.uploadedBy) names.add(m.uploadedBy)
+    }
+    return Array.from(names).sort((a, b) => a.localeCompare(b))
+  }, [media])
+
+  const filteredMedia = useMemo(() => {
+    return media.filter(m => {
+      if (filterType !== 'all' && m.mediaType !== filterType) return false
+      if (filterName && m.uploadedBy !== filterName) return false
+      return true
+    })
+  }, [media, filterType, filterName])
+
+  const photoItems = filteredMedia.filter(m => m.mediaType !== 'video')
 
   function toggleSelect(id: string) {
     setSelected(prev => {
@@ -41,10 +59,10 @@ export default function AdminMediaGrid({
   }
 
   function toggleSelectAll() {
-    if (selected.size === media.length) {
+    if (selected.size === filteredMedia.length) {
       setSelected(new Set())
     } else {
-      setSelected(new Set(media.map(m => m.id)))
+      setSelected(new Set(filteredMedia.map(m => m.id)))
     }
   }
 
@@ -174,10 +192,51 @@ export default function AdminMediaGrid({
 
   return (
     <>
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        {(['all', 'photo', 'video'] as const).map(type => (
+          <button
+            key={type}
+            onClick={() => setFilterType(type)}
+            className="px-3 py-1 rounded-full text-xs font-medium transition"
+            style={{
+              backgroundColor: filterType === type ? '#171717' : 'rgba(0,0,0,0.04)',
+              color: filterType === type ? '#fff' : '#737373',
+            }}
+          >
+            {type === 'all' ? 'All' : type === 'photo' ? 'Photos' : 'Videos'}
+          </button>
+        ))}
+        {uniqueNames.length > 0 && (
+          <>
+            <div className="w-px h-4 mx-1 bg-neutral-200" />
+            <select
+              value={filterName ?? ''}
+              onChange={e => setFilterName(e.target.value || null)}
+              className="px-3 py-1 rounded-full text-xs font-medium appearance-none cursor-pointer focus:outline-none transition"
+              style={{
+                backgroundColor: filterName ? '#171717' : 'rgba(0,0,0,0.04)',
+                color: filterName ? '#fff' : '#737373',
+                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='${filterName ? '%23fff' : '%23999'}'/%3E%3C/svg%3E")`,
+                backgroundRepeat: 'no-repeat',
+                backgroundPosition: 'right 10px center',
+                paddingRight: '1.75rem',
+              }}
+            >
+              <option value="">All guests</option>
+              {uniqueNames.map(name => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+            </select>
+          </>
+        )}
+      </div>
+
       {/* Toolbar */}
       <div className="flex items-center justify-between mb-3">
         <span className="text-sm text-neutral-500">
-          {media.length} item{media.length !== 1 ? 's' : ''}
+          {filteredMedia.length} item{filteredMedia.length !== 1 ? 's' : ''}
+          {filteredMedia.length !== media.length && ` (of ${media.length})`}
           {selectMode && selected.size > 0 && ` · ${selected.size} selected`}
         </span>
         <div className="flex items-center gap-2">
@@ -187,7 +246,7 @@ export default function AdminMediaGrid({
                 onClick={toggleSelectAll}
                 className="text-xs px-3 py-1.5 rounded-full border border-neutral-200 text-neutral-600 hover:bg-neutral-50 transition"
               >
-                {selected.size === media.length ? 'Deselect all' : 'Select all'}
+                {selected.size === filteredMedia.length ? 'Deselect all' : 'Select all'}
               </button>
               {selected.size > 0 && (
                 <button
@@ -217,8 +276,11 @@ export default function AdminMediaGrid({
       </div>
 
       {/* Grid */}
+      {filteredMedia.length === 0 && media.length > 0 && (
+        <p className="text-sm text-neutral-400 py-8 text-center">No items match the current filters.</p>
+      )}
       <div className="grid grid-cols-3 gap-3">
-        {media.map((item) => {
+        {filteredMedia.map((item) => {
           const isSelected = selected.has(item.id)
           return (
             <div

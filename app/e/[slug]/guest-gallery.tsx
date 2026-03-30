@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 
 type MediaItem = {
@@ -52,13 +52,32 @@ export default function GuestGallery({
   const [lightboxItem, setLightboxItem] = useState<MediaItem | null>(null)
   const [lightboxIndex, setLightboxIndex] = useState(0)
   const [uploadedBy, setUploadedBy] = useState('')
+  const [nameConfirmed, setNameConfirmed] = useState(false)
   const [pending, setPending] = useState<PendingMedia[]>([])
   const [isDragging, setIsDragging] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
   const [visible, setVisible] = useState(false)
+  const [filterType, setFilterType] = useState<'all' | 'photo' | 'video'>('all')
+  const [filterName, setFilterName] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
+
+  const uniqueNames = useMemo(() => {
+    const names = new Set<string>()
+    for (const m of media) {
+      if (m.uploadedBy) names.add(m.uploadedBy)
+    }
+    return Array.from(names).sort((a, b) => a.localeCompare(b))
+  }, [media])
+
+  const filteredMedia = useMemo(() => {
+    return media.filter(m => {
+      if (filterType !== 'all' && m.mediaType !== filterType) return false
+      if (filterName && m.uploadedBy !== filterName) return false
+      return true
+    })
+  }, [media, filterType, filterName])
   async function loadMore() {
     if (loadingMore || !hasMore || !cursor) return
     setLoadingMore(true)
@@ -241,6 +260,7 @@ export default function GuestGallery({
     setShowUploadModal(false)
     setPending([])
     setUploadedBy('')
+    setNameConfirmed(false)
     setError('')
   }
 
@@ -250,21 +270,21 @@ export default function GuestGallery({
   }
 
   function lightboxNext() {
-    let i = (lightboxIndex + 1) % media.length
-    while (media[i].mediaType === 'video' && i !== lightboxIndex) {
-      i = (i + 1) % media.length
+    let i = (lightboxIndex + 1) % filteredMedia.length
+    while (filteredMedia[i].mediaType === 'video' && i !== lightboxIndex) {
+      i = (i + 1) % filteredMedia.length
     }
     setLightboxIndex(i)
-    setLightboxItem(media[i])
+    setLightboxItem(filteredMedia[i])
   }
 
   function lightboxPrev() {
-    let i = (lightboxIndex - 1 + media.length) % media.length
-    while (media[i].mediaType === 'video' && i !== lightboxIndex) {
-      i = (i - 1 + media.length) % media.length
+    let i = (lightboxIndex - 1 + filteredMedia.length) % filteredMedia.length
+    while (filteredMedia[i].mediaType === 'video' && i !== lightboxIndex) {
+      i = (i - 1 + filteredMedia.length) % filteredMedia.length
     }
     setLightboxIndex(i)
-    setLightboxItem(media[i])
+    setLightboxItem(filteredMedia[i])
   }
 
   const touchStartX = useRef<number>(0)
@@ -307,14 +327,58 @@ export default function GuestGallery({
         </button>
       </div>
 
+      {/* Filters */}
+      {media.length > 0 && (
+        <div className="flex flex-wrap items-center justify-center gap-2 mb-8">
+          {(['all', 'photo', 'video'] as const).map(type => (
+            <button
+              key={type}
+              onClick={() => setFilterType(type)}
+              className="px-4 py-1.5 rounded-full text-xs font-sans font-medium transition"
+              style={{
+                backgroundColor: filterType === type ? 'var(--charcoal)' : 'rgba(28,28,28,0.06)',
+                color: filterType === type ? 'var(--ivory)' : 'var(--muted)',
+              }}
+            >
+              {type === 'all' ? 'All' : type === 'photo' ? 'Photos' : 'Videos'}
+            </button>
+          ))}
+          {uniqueNames.length > 0 && (
+            <>
+              <div className="w-px h-5 mx-1" style={{ backgroundColor: 'rgba(28,28,28,0.12)' }} />
+              <select
+                value={filterName ?? ''}
+                onChange={e => setFilterName(e.target.value || null)}
+                className="px-4 py-1.5 rounded-full text-xs font-sans font-medium appearance-none cursor-pointer focus:outline-none transition"
+                style={{
+                  backgroundColor: filterName ? 'var(--charcoal)' : 'rgba(28,28,28,0.06)',
+                  color: filterName ? 'var(--ivory)' : 'var(--muted)',
+                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='${filterName ? '%23f5f0eb' : '%23999'}'/%3E%3C/svg%3E")`,
+                  backgroundRepeat: 'no-repeat',
+                  backgroundPosition: 'right 12px center',
+                  paddingRight: '2rem',
+                }}
+              >
+                <option value="">All guests</option>
+                {uniqueNames.map(name => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
+            </>
+          )}
+        </div>
+      )}
+
       {/* Empty state */}
-      {media.length === 0 ? (
+      {filteredMedia.length === 0 ? (
         <div className="text-center py-20">
           <p className="font-display text-3xl font-light italic" style={{ color: 'var(--muted)' }}>
-            No media yet
+            {media.length === 0 ? 'No media yet' : 'No results'}
           </p>
           <p className="font-sans text-sm mt-2" style={{ color: 'var(--muted)' }}>
-            Be the first to share a memory from this event.
+            {media.length === 0
+              ? 'Be the first to share a memory from this event.'
+              : 'Try changing your filters.'}
           </p>
         </div>
       ) : (
@@ -322,7 +386,7 @@ export default function GuestGallery({
           className="columns-2 sm:columns-3 lg:columns-4 gap-3"
           style={{ opacity: visible ? 1 : 0, transition: 'opacity 0.6s ease', columnFill: 'balance' }}
         >
-          {media.map((mediaItem, i) => (
+          {filteredMedia.map((mediaItem, i) => (
             <div
               key={mediaItem.id}
               className="break-inside-avoid mb-3 rounded-2xl overflow-hidden cursor-pointer group relative"
@@ -413,9 +477,9 @@ export default function GuestGallery({
             <div className="flex items-center justify-between px-6 pt-4 pb-4 shrink-0">
               <div>
                 <h2 className="font-display text-2xl font-light" style={{ color: 'var(--charcoal)' }}>
-                  Share your memories
+                  {nameConfirmed ? 'Share your memories' : 'Welcome!'}
                 </h2>
-                {pending.length > 0 && (
+                {nameConfirmed && pending.length > 0 && (
                   <p className="font-sans text-xs mt-0.5" style={{ color: 'var(--muted)' }}>
                     {pending.length} item{pending.length !== 1 ? 's' : ''} selected
                     {uploading ? ` · ${doneCount} uploaded` : ''}
@@ -429,16 +493,39 @@ export default function GuestGallery({
               >✕</button>
             </div>
 
+            {!nameConfirmed ? (
+              <div className="flex-1 flex flex-col items-center justify-center px-6 pb-8">
+                <p className="font-sans text-sm mb-6 text-center" style={{ color: 'var(--muted)' }}>
+                  Let us know who you are before adding photos
+                </p>
+                <input
+                  type="text"
+                  placeholder="Enter your name"
+                  value={uploadedBy}
+                  onChange={e => setUploadedBy(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && uploadedBy.trim()) setNameConfirmed(true) }}
+                  autoFocus
+                  className="w-full max-w-xs px-4 py-2.5 rounded-xl text-sm font-sans text-gray-600 placeholder:text-gray-400 focus:outline-none mb-4 text-center"
+                  style={{ backgroundColor: 'rgba(28,28,28,0.05)', border: '1px solid rgba(28,28,28,0.1)' }}
+                />
+                <button
+                  onClick={() => setNameConfirmed(true)}
+                  disabled={!uploadedBy.trim()}
+                  className="px-8 py-2.5 rounded-xl text-sm font-sans font-medium transition"
+                  style={{
+                    backgroundColor: uploadedBy.trim() ? 'var(--charcoal)' : 'rgba(28,28,28,0.2)',
+                    color: 'var(--ivory)',
+                  }}
+                >
+                  Continue
+                </button>
+              </div>
+            ) : (
+            <>
             <div style={{ flex: '1 1 0', minHeight: 0, overflowY: 'scroll', WebkitOverflowScrolling: 'touch', padding: '0 1.5rem 1rem' }}>
-              <input
-                type="text"
-                placeholder="Your name (optional — applies to all photos)"
-                value={uploadedBy}
-                onChange={e => setUploadedBy(e.target.value)}
-                disabled={uploading}
-                className="w-full px-4 py-2.5 rounded-xl text-sm font-sans text-gray-600 placeholder:text-gray-400 focus:outline-none mb-4"
-                style={{ backgroundColor: 'rgba(28,28,28,0.05)', border: '1px solid rgba(28,28,28,0.1)' }}
-              />
+              <p className="font-sans text-xs mb-4 px-1" style={{ color: 'var(--muted)' }}>
+                Uploading as <span className="font-medium" style={{ color: 'var(--charcoal)' }}>{uploadedBy}</span>
+              </p>
 
               <div
                 className="rounded-2xl border-2 border-dashed p-5 text-center cursor-pointer transition-all duration-200 mb-4"
@@ -527,6 +614,8 @@ export default function GuestGallery({
                 {allDone ? `✓ ${doneCount} uploaded` : uploading ? `Uploading ${doneCount}/${pending.length}…` : `Upload ${pending.length > 0 ? pending.length : ''} item${pending.length !== 1 ? 's' : ''}`}
               </button>
             </div>
+            </>
+            )}
           </div>
         </div>
       )}
@@ -540,8 +629,8 @@ export default function GuestGallery({
           onTouchStart={onTouchStart}
           onTouchEnd={onTouchEnd}
         >
-          <link rel="preload" as="image" href={`/api/photo/${media[(lightboxIndex - 1 + media.length) % media.length].filename}`} />
-          <link rel="preload" as="image" href={`/api/photo/${media[(lightboxIndex + 1) % media.length].filename}`} />
+          <link rel="preload" as="image" href={`/api/photo/${filteredMedia[(lightboxIndex - 1 + filteredMedia.length) % filteredMedia.length].filename}`} />
+          <link rel="preload" as="image" href={`/api/photo/${filteredMedia[(lightboxIndex + 1) % filteredMedia.length].filename}`} />
 
           <button className="absolute left-4 sm:left-8 text-white/50 hover:text-white text-3xl z-10 transition" onClick={e => { e.stopPropagation(); lightboxPrev() }}>‹</button>
 
@@ -579,7 +668,7 @@ export default function GuestGallery({
               </div>
             )}
             <p className="text-center font-sans text-xs mt-3" style={{ color: 'rgba(255,255,255,0.3)' }}>
-              {lightboxIndex + 1} / {media.length}
+              {lightboxIndex + 1} / {filteredMedia.length}
             </p>
           </div>
 

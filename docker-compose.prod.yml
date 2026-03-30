@@ -37,7 +37,8 @@ services:
       - WATCHTOWER_POLL_INTERVAL=300        # check every 5 minutes
       - WATCHTOWER_CLEANUP=true             # remove old images automatically
       - WATCHTOWER_INCLUDE_STOPPED=false
-      - WATCHTOWER_LABEL_ENABLE=false       # watch all containers
+      - WATCHTOWER_LABEL_ENABLE=false
+      - DOCKER_API_VERSION=1.52       # watch all containers
     restart: unless-stopped
 
 volumes:

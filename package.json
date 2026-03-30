@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 3005",
-    "build": "next build -p 3006",
-    "start": "next start",
+    "dev": "next dev -p 3006",
+    "build": "next build",
+    "start": "next start -p 3005",
     "lint": "eslint",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
@@ -25,6 +25,7 @@
     "qrcode.react": "^4.2.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
+    "react-pageflip": "^2.0.3",
     "react-qrcode-logo": "^4.0.0",
     "resend": "^6.9.3",
     "sharp": "^0.34.5",
@@ -43,7 +44,7 @@
     "drizzle-kit": "^0.31.9",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
-    "tailwindcss": "^4",
+    "tailwindcss": "^4.2.2",
     "tsx": "^4.21.0",
     "typescript": "^5"
   }
