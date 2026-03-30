@@ -18,7 +18,7 @@ export async function DELETE(req: NextRequest) {
   const [item] = await db.select().from(mediaTable).where(eq(mediaTable.id, id)).limit(1)
   if (!item) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const filesToDelete = [item.filename, item.thumbnailFilename].filter(Boolean) as string[]
+  const filesToDelete = [item.filename, item.thumbnailFilename, item.webFilename].filter(Boolean) as string[]
   await Promise.allSettled(
     filesToDelete.map(f => unlink(path.join(UPLOAD_DIR, path.basename(f))))
   )

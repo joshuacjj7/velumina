@@ -13,12 +13,15 @@ type MediaItem = {
   caption: string | null
   uploadedBy: string | null
   mediaType: string
+  width: number | null
+  height: number | null
   createdAt: Date
 }
 
 type Event = {
   id: string
   name: string
+  uploadsEnabled: boolean
 }
 
 type PendingMedia = {
@@ -51,8 +54,18 @@ export default function GuestGallery({
   const [showUploadModal, setShowUploadModal] = useState(false)
   const [lightboxItem, setLightboxItem] = useState<MediaItem | null>(null)
   const [lightboxIndex, setLightboxIndex] = useState(0)
-  const [uploadedBy, setUploadedBy] = useState('')
-  const [nameConfirmed, setNameConfirmed] = useState(false)
+  const [uploadedBy, setUploadedBy] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('velumina_guest_name') ?? ''
+    }
+    return ''
+  })
+  const [nameConfirmed, setNameConfirmed] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return !!localStorage.getItem('velumina_guest_name')
+    }
+    return false
+  })
   const [pending, setPending] = useState<PendingMedia[]>([])
   const [isDragging, setIsDragging] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -233,7 +246,16 @@ export default function GuestGallery({
   async function handleUploadAll() {
     if (pending.length === 0) return
     setUploading(true)
-    const results = await Promise.all(pending.map((item, index) => uploadOne(item, index)))
+    const CONCURRENCY = 2
+    const results: (MediaItem | null)[] = new Array(pending.length).fill(null)
+    let next = 0
+    async function worker() {
+      while (next < pending.length) {
+        const i = next++
+        results[i] = await uploadOne(pending[i], i)
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, pending.length) }, () => worker()))
     const uploaded = results.filter(Boolean) as MediaItem[]
     if (uploaded.length > 0) {
       setMedia(prev => {
@@ -249,7 +271,6 @@ export default function GuestGallery({
       setTimeout(() => {
         setShowUploadModal(false)
         setPending([])
-        setUploadedBy('')
         setError('')
       }, 800)
     }
@@ -259,8 +280,6 @@ export default function GuestGallery({
     if (uploading) return
     setShowUploadModal(false)
     setPending([])
-    setUploadedBy('')
-    setNameConfirmed(false)
     setError('')
   }
 
@@ -317,15 +336,17 @@ export default function GuestGallery({
   return (
     <div className="px-4 sm:px-8 pb-16 max-w-6xl mx-auto">
       {/* Upload CTA */}
-      <div className="flex justify-center mb-10">
-        <button
-          onClick={() => setShowUploadModal(true)}
-          className="btn-primary group flex items-center gap-2 px-8 py-3 rounded-full text-sm font-sans font-medium"
-        >
-          <span className="text-lg leading-none">+</span>
-          Add your photos
-        </button>
-      </div>
+      {event.uploadsEnabled && (
+        <div className="flex justify-center mb-10">
+          <button
+            onClick={() => setShowUploadModal(true)}
+            className="btn-primary group flex items-center gap-2 px-8 py-3 rounded-full text-sm font-sans font-medium"
+          >
+            <span className="text-lg leading-none">+</span>
+            Add your photos
+          </button>
+        </div>
+      )}
 
       {/* Filters */}
       {media.length > 0 && (
@@ -432,11 +453,18 @@ export default function GuestGallery({
                   </div>
                 </div>
               ) : (
-              <div className="relative w-full">
+              <div className="relative w-full overflow-hidden" style={{
+                ...(mediaItem.width && mediaItem.height ? { aspectRatio: `${mediaItem.width}/${mediaItem.height}` } : {}),
+                ...(mediaItem.blurDataUrl ? {
+                  backgroundImage: `url(${mediaItem.blurDataUrl})`,
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center',
+                } : { backgroundColor: 'rgba(28,28,28,0.06)' }),
+              }}>
                 <img
-                  src={`/api/photo/${mediaItem.webFilename ?? mediaItem.filename}`}
+                  src={`/api/photo/${mediaItem.thumbnailFilename ?? mediaItem.webFilename ?? mediaItem.filename}`}
                   alt={mediaItem.caption ?? mediaItem.originalName}
-                  className="relative w-full object-cover transition-opacity duration-700 group-hover:scale-[1.03]"
+                  className="relative w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
                   loading="lazy"
                 />
               </div>
@@ -503,13 +531,13 @@ export default function GuestGallery({
                   placeholder="Enter your name"
                   value={uploadedBy}
                   onChange={e => setUploadedBy(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter' && uploadedBy.trim()) setNameConfirmed(true) }}
+                  onKeyDown={e => { if (e.key === 'Enter' && uploadedBy.trim()) { localStorage.setItem('velumina_guest_name', uploadedBy.trim()); setNameConfirmed(true) } }}
                   autoFocus
                   className="w-full max-w-xs px-4 py-2.5 rounded-xl text-sm font-sans text-gray-600 placeholder:text-gray-400 focus:outline-none mb-4 text-center"
                   style={{ backgroundColor: 'rgba(28,28,28,0.05)', border: '1px solid rgba(28,28,28,0.1)' }}
                 />
                 <button
-                  onClick={() => setNameConfirmed(true)}
+                  onClick={() => { localStorage.setItem('velumina_guest_name', uploadedBy.trim()); setNameConfirmed(true) }}
                   disabled={!uploadedBy.trim()}
                   className="px-8 py-2.5 rounded-xl text-sm font-sans font-medium transition"
                   style={{
@@ -525,6 +553,13 @@ export default function GuestGallery({
             <div style={{ flex: '1 1 0', minHeight: 0, overflowY: 'scroll', WebkitOverflowScrolling: 'touch', padding: '0 1.5rem 1rem' }}>
               <p className="font-sans text-xs mb-4 px-1" style={{ color: 'var(--muted)' }}>
                 Uploading as <span className="font-medium" style={{ color: 'var(--charcoal)' }}>{uploadedBy}</span>
+                {!uploading && (
+                  <button
+                    onClick={() => setNameConfirmed(false)}
+                    className="ml-2 underline transition"
+                    style={{ color: 'var(--muted)' }}
+                  >change</button>
+                )}
               </p>
 
               <div
@@ -629,8 +664,8 @@ export default function GuestGallery({
           onTouchStart={onTouchStart}
           onTouchEnd={onTouchEnd}
         >
-          <link rel="preload" as="image" href={`/api/photo/${filteredMedia[(lightboxIndex - 1 + filteredMedia.length) % filteredMedia.length].filename}`} />
-          <link rel="preload" as="image" href={`/api/photo/${filteredMedia[(lightboxIndex + 1) % filteredMedia.length].filename}`} />
+          <link rel="preload" as="image" href={`/api/photo/${(() => { const m = filteredMedia[(lightboxIndex - 1 + filteredMedia.length) % filteredMedia.length]; return m.webFilename ?? m.filename; })()}`} />
+          <link rel="preload" as="image" href={`/api/photo/${(() => { const m = filteredMedia[(lightboxIndex + 1) % filteredMedia.length]; return m.webFilename ?? m.filename; })()}`} />
 
           <button className="absolute left-4 sm:left-8 text-white/50 hover:text-white text-3xl z-10 transition" onClick={e => { e.stopPropagation(); lightboxPrev() }}>‹</button>
 
@@ -655,7 +690,7 @@ export default function GuestGallery({
             ) : (
               <img
                 key={lightboxItem.id}
-                src={`/api/photo/${lightboxItem.filename}`}
+                src={`/api/photo/${lightboxItem.webFilename ?? lightboxItem.filename}`}
                 alt={lightboxItem.caption ?? lightboxItem.originalName}
                 className="max-h-[80vh] max-w-full rounded-2xl object-contain"
                 style={{ boxShadow: '0 24px 64px rgba(0,0,0,0.5)' }}

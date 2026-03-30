@@ -23,11 +23,15 @@ export default function AdminMediaGrid({
 }) {
   const router = useRouter()
   const [media, setMedia] = useState(initialMedia)
+  useEffect(() => { setMedia(initialMedia) }, [initialMedia])
   const [selectMode, setSelectMode] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [lightboxItem, setLightboxItem] = useState<MediaItem | null>(null)
   const [lightboxIndex, setLightboxIndex] = useState(0)
   const [deleting, setDeleting] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState('')
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [filterType, setFilterType] = useState<'all' | 'photo' | 'video'>('all')
   const [filterName, setFilterName] = useState<string | null>(null)
   const touchStartX = useRef<number>(0)
@@ -109,6 +113,33 @@ export default function AdminMediaGrid({
     }
   }
 
+  async function handleUpload(files: FileList | null) {
+    if (!files || files.length === 0) return
+    setUploading(true)
+    let done = 0
+    const total = files.length
+    setUploadProgress(`0 / ${total}`)
+
+    for (const file of Array.from(files)) {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('eventId', eventId)
+      formData.append('uploadedBy', 'Admin')
+      try {
+        await fetch('/api/upload', { method: 'POST', body: formData })
+      } catch (err) {
+        console.error('Upload failed:', file.name, err)
+      }
+      done++
+      setUploadProgress(`${done} / ${total}`)
+    }
+
+    setUploading(false)
+    setUploadProgress('')
+    if (fileInputRef.current) fileInputRef.current.value = ''
+    router.refresh()
+  }
+
   function playVideoFullscreen(item: MediaItem) {
     const overlay = document.createElement('div')
     overlay.style.cssText = `
@@ -187,7 +218,28 @@ export default function AdminMediaGrid({
   }, [lightboxItem, lightboxIndex])
 
   if (media.length === 0) {
-    return <p className="text-sm text-neutral-400">No media uploaded yet.</p>
+    return (
+      <>
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept="image/*,video/*"
+          className="hidden"
+          onChange={e => handleUpload(e.target.files)}
+        />
+        <div className="flex flex-col items-center gap-3 py-8">
+          <p className="text-sm text-neutral-400">No media uploaded yet.</p>
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+            className="text-xs px-4 py-2 rounded-full bg-neutral-900 text-white hover:bg-neutral-700 transition disabled:opacity-50"
+          >
+            {uploading ? `Uploading ${uploadProgress}` : '+ Upload photos'}
+          </button>
+        </div>
+      </>
+    )
   }
 
   return (
@@ -265,12 +317,29 @@ export default function AdminMediaGrid({
               </button>
             </>
           ) : (
-            <button
-              onClick={() => setSelectMode(true)}
-              className="text-xs px-3 py-1.5 rounded-full border border-neutral-200 text-neutral-600 hover:bg-neutral-50 transition"
-            >
-              Select
-            </button>
+            <>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept="image/*,video/*"
+                className="hidden"
+                onChange={e => handleUpload(e.target.files)}
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className="text-xs px-3 py-1.5 rounded-full border border-neutral-200 text-neutral-600 hover:bg-neutral-50 transition disabled:opacity-50"
+              >
+                {uploading ? `Uploading ${uploadProgress}` : '+ Upload'}
+              </button>
+              <button
+                onClick={() => setSelectMode(true)}
+                className="text-xs px-3 py-1.5 rounded-full border border-neutral-200 text-neutral-600 hover:bg-neutral-50 transition"
+              >
+                Select
+              </button>
+            </>
           )}
         </div>
       </div>

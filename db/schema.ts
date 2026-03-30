@@ -24,6 +24,7 @@ export const events = pgTable('events', {
   date: timestamp('date'),
   coverPhotoId: uuid('cover_photo_id'),
   password: text('password'),  // null = public, set = protected
+  uploadsEnabled: boolean('uploads_enabled').default(true).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 })

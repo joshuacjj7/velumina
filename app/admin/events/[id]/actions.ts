@@ -14,6 +14,7 @@ export async function updateEvent(formData: FormData) {
   const description = formData.get('description') as string
   const date = formData.get('date') as string
   const password = formData.get('password') as string
+  const uploadsEnabled = formData.get('uploadsEnabled') === 'true'
 
   await db.update(events).set({
     name,
@@ -21,11 +22,14 @@ export async function updateEvent(formData: FormData) {
     description: description || null,
     date: date ? new Date(date) : null,
     password: password || null,
+    uploadsEnabled,
     updatedAt: new Date(),
   }).where(eq(events.id, id))
 
   redirect(`/admin/events/${id}`)
 }
+
+const UPLOAD_DIR = process.env.UPLOAD_DIR ?? path.join(process.cwd(), 'uploads')
 
 export async function deletePhoto(formData: FormData) {
   const id = formData.get('id') as string
@@ -34,10 +38,11 @@ export async function deletePhoto(formData: FormData) {
   const [mediaItem] = await db.select().from(media).where(eq(media.id, id)).limit(1)
 
   if (mediaItem) {
+    const filesToDelete = [mediaItem.filename, mediaItem.thumbnailFilename, mediaItem.webFilename].filter(Boolean) as string[]
+    await Promise.allSettled(
+      filesToDelete.map(f => unlink(path.join(UPLOAD_DIR, path.basename(f))))
+    )
     await db.delete(media).where(eq(media.id, id))
-    try {
-      await unlink(path.join(process.cwd(), 'public', 'uploads', mediaItem.filename))
-    } catch {}
   }
 
   redirect(`/admin/events/${eventId}`)

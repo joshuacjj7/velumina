@@ -18,7 +18,20 @@ export async function GET(
     : eq(mediaTable.eventId, id)
 
   const items = await db
-    .select()
+    .select({
+      id: mediaTable.id,
+      filename: mediaTable.filename,
+      webFilename: mediaTable.webFilename,
+      thumbnailFilename: mediaTable.thumbnailFilename,
+      originalName: mediaTable.originalName,
+      blurDataUrl: mediaTable.blurDataUrl,
+      caption: mediaTable.caption,
+      uploadedBy: mediaTable.uploadedBy,
+      mediaType: mediaTable.mediaType,
+      width: mediaTable.width,
+      height: mediaTable.height,
+      createdAt: mediaTable.createdAt,
+    })
     .from(mediaTable)
     .where(conditions)
     .orderBy(desc(mediaTable.createdAt))

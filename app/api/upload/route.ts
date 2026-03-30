@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { auth } from '@/auth'
 import { db } from '@/db'
-import { media } from '@/db/schema'
+import { media, events } from '@/db/schema'
+import { eq } from 'drizzle-orm'
 import { writeFile, mkdir } from 'fs/promises'
 import path from 'path'
 import { v4 as uuidv4 } from 'uuid'
@@ -34,13 +36,22 @@ async function generateVideoThumbnail(videoFilename: string): Promise<string | n
     return null
   }
 }
-async function generateWebVersion(buffer: Buffer, filename: string): Promise<string> {
-  const webFilename = `web_${filename.replace(/\.[^.]+$/, '.jpg')}`
-  await sharp(buffer)
-    .resize(1200, 1200, { fit: 'inside', withoutEnlargement: true })
-    .jpeg({ quality: 82, progressive: true })
-    .toFile(path.join(UPLOAD_DIR, webFilename))
-  return webFilename
+async function generateWebVersion(buffer: Buffer, filename: string): Promise<{ webFilename: string; thumbFilename: string }> {
+  const baseName = filename.replace(/\.[^.]+$/, '.jpg')
+  const webFilename = `web_${baseName}`
+  const thumbFilename = `thumb_${baseName}`
+  const sharpInstance = sharp(buffer)
+  await Promise.all([
+    sharpInstance.clone()
+      .resize(1200, 1200, { fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 82, progressive: true })
+      .toFile(path.join(UPLOAD_DIR, webFilename)),
+    sharpInstance.clone()
+      .resize(400, 400, { fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 75, progressive: true })
+      .toFile(path.join(UPLOAD_DIR, thumbFilename)),
+  ])
+  return { webFilename, thumbFilename }
 }
 async function generateBlurDataUrl(buffer: Buffer): Promise<string | null> {
   try {
@@ -63,6 +74,15 @@ export async function POST(req: NextRequest) {
 
     if (!file || !eventId) {
       return NextResponse.json({ error: 'Missing file or eventId' }, { status: 400 })
+    }
+
+    const [event] = await db.select().from(events).where(eq(events.id, eventId)).limit(1)
+    if (!event) {
+      return NextResponse.json({ error: 'Event not found' }, { status: 404 })
+    }
+    const session = await auth()
+    if (!event.uploadsEnabled && !session) {
+      return NextResponse.json({ error: 'Uploads are disabled for this event' }, { status: 403 })
     }
 
     const isImage = IMAGE_TYPES.includes(file.type)
@@ -92,17 +112,28 @@ export async function POST(req: NextRequest) {
     if (isVideo) {
       thumbnailFilename = await generateVideoThumbnail(filename)
     }
-let blurDataUrl: string | null = null
-let webFilename: string | null = null
-if (isImage) {
-  webFilename = await generateWebVersion(buffer, filename)
-  blurDataUrl = await generateBlurDataUrl(buffer)
-}
+    let blurDataUrl: string | null = null
+    let webFilename: string | null = null
+    let imageThumbFilename: string | null = null
+    let imageWidth: number | null = null
+    let imageHeight: number | null = null
+    if (isImage) {
+      const [versions, blur, metadata] = await Promise.all([
+        generateWebVersion(buffer, filename),
+        generateBlurDataUrl(buffer),
+        sharp(buffer).metadata(),
+      ])
+      webFilename = versions.webFilename
+      imageThumbFilename = versions.thumbFilename
+      blurDataUrl = blur
+      imageWidth = metadata.width ?? null
+      imageHeight = metadata.height ?? null
+    }
 
-const [mediaItem] = await db.insert(media).values({
+    const [mediaItem] = await db.insert(media).values({
       eventId,
       filename,
-      thumbnailFilename,
+      thumbnailFilename: thumbnailFilename ?? imageThumbFilename,
       originalName: file.name,
       mimeType: file.type,
       blurDataUrl,
@@ -110,6 +141,8 @@ const [mediaItem] = await db.insert(media).values({
       size: file.size,
       caption: caption || null,
       uploadedBy: uploadedBy || null,
+      width: imageWidth,
+      height: imageHeight,
       mediaType: isVideo ? 'video' : 'photo',
     }).returning()
 

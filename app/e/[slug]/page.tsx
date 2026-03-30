@@ -5,7 +5,6 @@ import { notFound } from 'next/navigation'
 import GuestGallery from './guest-gallery'
 import EventUnlock from './event-unlock'
 import { cookies } from 'next/headers'
-import { sql } from 'drizzle-orm'
 
 export default async function GuestEventPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
@@ -21,26 +20,28 @@ export default async function GuestEventPage({ params }: { params: Promise<{ slu
       return <EventUnlock event={{ id: event.id, name: event.name, date: event.date }} />
     }
   }
-  const eventMedia = await db
-    .select()
+  const rows = await db
+    .select({
+      id: media.id,
+      filename: media.filename,
+      webFilename: media.webFilename,
+      thumbnailFilename: media.thumbnailFilename,
+      originalName: media.originalName,
+      blurDataUrl: media.blurDataUrl,
+      caption: media.caption,
+      uploadedBy: media.uploadedBy,
+      mediaType: media.mediaType,
+      width: media.width,
+      height: media.height,
+      createdAt: media.createdAt,
+    })
     .from(media)
     .where(eq(media.eventId, event.id))
     .orderBy(desc(media.createdAt))
+    .limit(25)
 
-const initialMedia = await db
-  .select()
-  .from(media)
-  .where(eq(media.eventId, event.id))
-  .orderBy(desc(media.createdAt))
-  .limit(24)
-
-// Check if there are more
-const totalCount = await db
-  .select({ count: sql<number>`count(*)` })
-  .from(media)
-  .where(eq(media.eventId, event.id))
-
-const hasMore = Number(totalCount[0].count) > 24
+  const hasMore = rows.length > 24
+  const initialMedia = hasMore ? rows.slice(0, 24) : rows
 
 
   return (

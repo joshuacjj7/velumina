@@ -91,6 +91,24 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
                   {event.password ? '🔒 This event is password protected' : '🌐 This event is public'}
                 </p>
               </div>
+              <div className="flex items-center gap-3">
+                <input
+                  type="hidden"
+                  name="uploadsEnabled"
+                  value="false"
+                />
+                <input
+                  id="uploadsEnabled"
+                  name="uploadsEnabled"
+                  type="checkbox"
+                  defaultChecked={event.uploadsEnabled}
+                  value="true"
+                  className="h-4 w-4 rounded border-neutral-300 text-neutral-900 focus:ring-neutral-300"
+                />
+                <label htmlFor="uploadsEnabled" className="text-sm font-medium text-neutral-700">
+                  Allow guests to upload photos
+                </label>
+              </div>
               <button
                 type="submit"
                 className="bg-neutral-900 text-white rounded-lg py-2 text-sm font-medium hover:bg-neutral-700 transition"
@@ -101,25 +119,21 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
           </div>
 
           {/* Photos and Videos */}
-          {eventMedia.length === 0 ? (
-            <p className="text-sm text-neutral-400">No photos uploaded yet.</p>
-          ) : (
-            <div className="bg-white border border-neutral-100 rounded-xl p-5">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="font-semibold text-neutral-800">Media ({eventMedia.length})</h2>
-                {eventMedia.length > 0 && (
-                  <a 
-                    href={`/api/events/${event.id}/download`}
-                    className="font-sans text-xs px-3 py-1.5 rounded-full transition"
-                    style={{ border: '1px solid rgba(28,28,28,0.15)', color: 'var(--muted)' }}
-                  >
-                    Download all ↓
-                  </a>
-                )}
-              </div>
-              <AdminMediaGrid eventId={event.id} initialMedia={eventMedia} />
+          <div className="bg-white border border-neutral-100 rounded-xl p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-semibold text-neutral-800">Media ({eventMedia.length})</h2>
+              {eventMedia.length > 0 && (
+                <a
+                  href={`/api/events/${event.id}/download`}
+                  className="font-sans text-xs px-3 py-1.5 rounded-full transition"
+                  style={{ border: '1px solid rgba(28,28,28,0.15)', color: 'var(--muted)' }}
+                >
+                  Download all ↓
+                </a>
+              )}
             </div>
-            )}
+            <AdminMediaGrid eventId={event.id} initialMedia={eventMedia} />
+          </div>
           </div>
 
         {/* Right — QR code */}
@@ -137,13 +151,15 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
             >
               Open guest page →
             </a>
-            <a
-              href={`/e/${event.slug}/book`}
-              className="flex items-center gap-2 px-5 py-3 rounded-full text-sm font-sans font-medium transition"
-              style={{ border: '1px solid rgba(28,28,28,0.15)', color: 'var(--muted)' }}
-            >
-              📖 Photobook
-            </a>
+            {eventMedia.length > 0 && (
+              <a
+                href={`/e/${event.slug}/book`}
+                className="flex items-center gap-2 px-5 py-3 rounded-full text-sm font-sans font-medium transition mt-3"
+                style={{ border: '1px solid rgba(28,28,28,0.15)', color: 'var(--muted)' }}
+              >
+                📖 Photobook
+              </a>
+            )}
           </div>
         </div>
       </div>
