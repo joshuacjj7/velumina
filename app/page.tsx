@@ -186,15 +186,9 @@ export default function LandingPage() {
         </h2>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-          {steps.map((s, i) => (
+          {steps.map((s) => (
             <div key={s.n} className="relative">
-              {/* Connector line */}
-              {i < steps.length - 1 && (
-                <div
-                  className="absolute top-8 left-full w-full h-px hidden lg:block"
-                  style={{ backgroundColor: 'rgba(196,144,122,0.2)', zIndex: 0 }}
-                />
-              )}
+
               <div
                 className="font-display text-6xl font-light leading-none mb-4"
                 style={{ color: 'rgba(196,144,122,0.3)' }}

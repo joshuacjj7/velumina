@@ -6,7 +6,18 @@ services:
     volumes:
       - ${UPLOADS_DIR:-./uploads}:/app/uploads
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-velumina}:${POSTGRES_PASSWORD:-your_secure_password}@db:5432/${POSTGRES_DB:-velumina}
+      - POSTGRES_USER=${POSTGRES_USER:-velumina}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB:-velumina}
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - AUTH_SECRET=${AUTH_SECRET}
+      - AUTH_TRUST_HOST=${AUTH_TRUST_HOST:-true}
+      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
+      - UPLOAD_DIR=/app/uploads
+      - RESEND_API_KEY=${RESEND_API_KEY}
+      - RESEND_FROM_EMAIL=${RESEND_FROM_EMAIL}
+      - CRON_SECRET=${CRON_SECRET}
       - NODE_ENV=production
     depends_on:
       db:
@@ -17,7 +28,7 @@ services:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-velumina}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-your_secure_password}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB:-velumina}
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -34,11 +45,11 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - /root/.docker/config.json:/config.json
     environment:
-      - WATCHTOWER_POLL_INTERVAL=300        # check every 5 minutes
-      - WATCHTOWER_CLEANUP=true             # remove old images automatically
+      - WATCHTOWER_POLL_INTERVAL=300
+      - WATCHTOWER_CLEANUP=true
       - WATCHTOWER_INCLUDE_STOPPED=false
       - WATCHTOWER_LABEL_ENABLE=false
-      - DOCKER_API_VERSION=1.52       # watch all containers
+      - DOCKER_API_VERSION=1.52
     restart: unless-stopped
 
 volumes:

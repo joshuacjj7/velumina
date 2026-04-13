@@ -19,7 +19,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       >
         {/* Left */}
         <div className="flex items-center gap-6">
-          <Link href="/admin" className="font-display text-xl font-light tracking-wide" style={{ color: 'var(--charcoal)' }}>
+          <Link href="/" className="font-display text-xl font-light tracking-wide" style={{ color: 'var(--charcoal)' }}>
             Velumina
           </Link>
 
